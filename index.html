@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Factory Radar v12 | 공장 검색·지도·배송비 계산</title>
-  <meta name="description" content="검색어와 상세 주소만 입력하면 주변 공장을 찾고, 지도·이동시간·편도/왕복/배송비를 계산합니다." />
+  <title>Factory Radar | 근처 공장 검색</title>
+  <meta name="description" content="검색어와 기준 주소를 입력하면 선택한 반경 안의 근처 공장을 찾습니다." />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -27,29 +27,30 @@
       <form id="searchForm" class="search-grid">
         <label>
           <span>무엇을 찾나요?</span>
-          <input id="keywordInput" placeholder="판금, CNC, 금형, 도금, 사출, 알루미늄..." value="판금" autocomplete="off" />
+          <input id="keywordInput" placeholder="판금, CNC, 금형, 도금, 사출, 알루미늄" value="" autocomplete="off" />
         </label>
         <label>
           <span>기준 주소</span>
           <input id="originInput" placeholder="남양주시 진접읍 금강로 123번길 10" value="남양주시" autocomplete="off" />
         </label>
         <label>
-          <span>이용 방식</span>
-          <select id="modeSelect">
-            <option value="delivery">공장 → 내 주소 주문배송</option>
-            <option value="oneway">내 주소 → 공장 편도 방문</option>
-            <option value="roundtrip">내 주소 ↔ 공장 왕복 방문</option>
+          <span>검색 반경</span>
+          <select id="radiusSelect">
+            <option value="5">5km 이내</option>
+            <option value="10" selected>10km 이내</option>
+            <option value="20">20km 이내</option>
+            <option value="30">30km 이내</option>
+            <option value="50">50km 이내</option>
+            <option value="100">100km 이내</option>
           </select>
         </label>
         <label>
-          <span>차량</span>
-          <select id="vehicleSelect">
-            <option value="bike">오토바이/소형</option>
-            <option value="damas">다마스·라보</option>
-            <option value="1t" selected>1톤 트럭</option>
-            <option value="2_5t">2.5톤 트럭</option>
-            <option value="5t">5톤 트럭</option>
-            <option value="11t">11톤 트럭</option>
+          <span>추천 기준</span>
+          <select id="scoreThreshold">
+            <option value="35">낮음 35점</option>
+            <option value="45" selected>보통 45점</option>
+            <option value="55">높음 55점</option>
+            <option value="65">매우 높음 65점</option>
           </select>
         </label>
         <button class="primary" type="submit">공장 찾기</button>
@@ -66,7 +67,7 @@
       <div><strong id="sumRegion">-</strong><span>검색 지역</span></div>
       <div><strong id="sumFound">0</strong><span>일치 공장</span></div>
       <div><strong id="sumMapped">0</strong><span>지도 표시</span></div>
-      <div><strong id="sumCheapest">-</strong><span>최저 예상비</span></div>
+      <div><strong id="sumCheapest">-</strong><span>가장 가까움</span></div>
     </section>
 
     <section class="workspace">
@@ -82,7 +83,7 @@
           </div>
           <select id="sortSelect" title="정렬">
             <option value="score">추천순</option>
-            <option value="cost">비용 낮은순</option>
+            <option value="distance">거리 가까운순</option>
             <option value="time">시간 짧은순</option>
             <option value="emp">규모 큰순</option>
           </select>
@@ -96,12 +97,12 @@
       <div>
         <p class="eyebrow">선택 공장 비용 계산</p>
         <h2 id="selectedName">공장을 선택하세요</h2>
-        <p id="selectedAddress">검색 결과에서 공장을 누르면 편도·왕복·주문배송 비용을 보여줍니다.</p>
+        <p id="selectedAddress">검색 결과에서 공장을 누르면 기준 주소에서의 거리와 예상 시간을 보여줍니다.</p>
       </div>
       <div class="calc-grid">
         <div><span>거리</span><strong id="selectedDistance">-</strong></div>
         <div><span>예상 시간</span><strong id="selectedTime">-</strong></div>
-        <div><span>예상 비용</span><strong id="selectedCost">-</strong></div>
+        <div><span>추천 점수</span><strong id="selectedCost">-</strong></div>
         <div><span>생산품</span><strong id="selectedProduct">-</strong></div>
       </div>
     </section>
@@ -109,9 +110,9 @@
     <section class="how">
       <h2>간단한 사용 방식</h2>
       <div class="how-grid">
-        <div><b>1</b><h3>검색어 입력</h3><p>판금, CNC, 금형처럼 필요한 단어만 입력합니다.</p></div>
+        <div><b>1</b><h3>검색어 입력</h3><p>판금, CNC, 씨엔씨, 머시닝, 가공처럼 다르게 입력해도 같은 공정으로 묶어 찾습니다.</p></div>
         <div><b>2</b><h3>상세 주소 입력</h3><p>남양주시 진접읍, 동탄 몇 번지처럼 최대한 자세히 입력합니다.</p></div>
-        <div><b>3</b><h3>시간·비용 확인</h3><p>편도, 왕복, 주문배송 기준으로 이동시간과 예상비를 계산합니다.</p></div>
+        <div><b>3</b><h3>거리 확인</h3><p>선택한 검색 반경 안에서 가까운 공장과 예상 이동시간을 확인합니다. 결과가 없으면 반경을 넓히거나 추천 기준을 낮출 수 있습니다.</p></div>
       </div>
     </section>
   </main>

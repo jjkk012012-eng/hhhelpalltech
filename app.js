@@ -22,17 +22,20 @@
   };
 
   const SYN = {
-    판금:['판금','절곡','레이저','샤링','철판','스텐','스테인리스','금속판','판제품','함석','브라켓','케이스','콘솔','박판','금속케이스','금속상자'],
-    cnc:['cnc','CNC','mct','MCT','머시닝','머시닝센터','선반','밀링','절삭','정밀가공','복합가공','금속가공'],
-    금형:['금형','주형','몰드','mold','사출금형','프레스금형','다이'],
-    도금:['도금','표면처리','코팅','아노다이징','도장','분체','크롬','니켈','전착'],
-    사출:['사출','사출성형','플라스틱사출','고무사출','성형','압출','플라스틱'],
-    용접:['용접','제관','철구조물','구조물','금속구조','프레임'],
-    알루미늄:['알루미늄','al','AL','비철','압출','다이캐스팅','주조'],
-    pcb:['pcb','PCB','인쇄회로','회로기판','SMT','smt','실장','전자부품'],
-    배전반:['배전반','제어반','전기제어','자동제어','분전반','수배전반'],
-    포장:['포장','박스','골판지','필름','용기','라벨','파렛트']
+    판금:['판금','절곡','밴딩','벤딩','레이저','레이저컷팅','레이저커팅','샤링','NCT','nct','터렛','철판','스텐','스테인리스','스텐레스','금속판','판제품','함석','브라켓','케이스','콘솔','박판','판재','금속케이스','금속상자','각종판금'],
+    cnc:['cnc','CNC','씨엔씨','씨앤씨','cnc가공','씨엔씨가공','정밀가공','기계가공','부품가공','금속가공','가공','임가공','절삭','절삭가공','머시닝','머시닝센터','mct','MCT','엠씨티','밀링','밀링가공','선반','cnc선반','CNC선반','NC선반','터닝','복합가공','5축','오축','오축가공','탭가공','드릴링'],
+    금형:['금형','금형제작','금형가공','금형수리','주형','몰드','mold','MOLD','다이','die','사출금형','프레스금형','플라스틱금형','고무금형','금형설계','금형제조'],
+    도금:['도금','표면처리','표면가공','피막','코팅','아노다이징','아노다이징처리','알마이트','도장','분체','분체도장','크롬','크롬도금','니켈','니켈도금','아연','아연도금','전착','전착도장','흑착색','착색','열처리'],
+    사출:['사출','사출성형','플라스틱사출','플라스틱성형','고무사출','고무성형','성형','압출','플라스틱','수지','수지성형','인서트사출','사출품','사출제조'],
+    용접:['용접','알곤','알곤용접','아르곤','티그','TIG','tig','미그','MIG','mig','스폿','스팟','제관','제관용접','철구조물','구조물','금속구조','프레임','파이프용접','배관용접'],
+    알루미늄:['알루미늄','알미늄','알루미늄가공','알미늄가공','al','AL','비철','비철금속','압출','알루미늄압출','다이캐스팅','다이케스팅','주조','주물'],
+    pcb:['pcb','PCB','피씨비','인쇄회로','인쇄회로기판','회로기판','SMT','smt','에스엠티','실장','전자부품','전자회로','기판','회로'],
+    배전반:['배전반','제어반','전기제어','자동제어','분전반','수배전반','전장','전장박스','컨트롤박스','판넬','패널'],
+    포장:['포장','박스','골판지','카톤','필름','용기','라벨','스티커','파렛트','팔레트','완충재','포장재']
   };
+
+  const CATEGORY_LABELS = { cnc:'CNC', pcb:'PCB' };
+  const DEFAULT_MIN_RECOMMEND_SCORE = 45;
 
   const PLACE_HINTS = [
     { names:['동탄','화성시 동탄','동탄신도시'], sido:'경기도', sigungu:'화성시', lat:37.1995, lng:127.0988 },
@@ -74,9 +77,10 @@
     naverId: localStorage.getItem('fr10.naverId') || '',
     naverSecret: localStorage.getItem('fr10.naverSecret') || '',
     mapKind: 'leaflet', map: null, markers: [], originMarker: null,
-    origin: null, loaded: new Set(), rows: [], candidates: [], selected: null,
+    origin: null, loaded: new Set(), rows: [], candidates: [], allCandidates: [], selected: null,
     maxGeocode: Number(localStorage.getItem('fr10.maxGeocode') || 20),
     maxDistance: Number(localStorage.getItem('fr10.maxDistance') || 20),
+    minRecommendScore: Number(localStorage.getItem('fr10.minRecommendScore') || DEFAULT_MIN_RECOMMEND_SCORE),
     geocodeCache: readJSON('fr10.geocodeCache', {}), distanceCache: readJSON('fr10.distanceCache', {})
   };
 
@@ -93,8 +97,16 @@
   function bind(){
     $('searchForm').addEventListener('submit', e => { e.preventDefault(); runSearch(); });
     $('sortSelect').addEventListener('change', () => { sortCandidates(); renderResults(); });
-    $('modeSelect').addEventListener('change', refreshCosts);
-    $('vehicleSelect').addEventListener('change', refreshCosts);
+    $('radiusSelect').addEventListener('change', refreshRadius);
+    const scoreSelect = $('scoreThreshold');
+    if(scoreSelect){
+      scoreSelect.value = String(state.minRecommendScore);
+      scoreSelect.addEventListener('change', () => {
+        state.minRecommendScore = getMinScore();
+        localStorage.setItem('fr10.minRecommendScore', String(state.minRecommendScore));
+        if(state.allCandidates.length){ applyRadiusFilter(); sortCandidates(); renderResults(); renderSelected(); }
+      });
+    }
     const apiOpen = $('apiOpen'); if(apiOpen) apiOpen.addEventListener('click', () => $('apiDialog')?.showModal());
     const apiSave = $('apiSave'); if(apiSave) apiSave.addEventListener('click', saveApi);
     const clearCache = $('clearCache'); if(clearCache) clearCache.addEventListener('click', () => { localStorage.removeItem('fr10.geocodeCache'); localStorage.removeItem('fr10.distanceCache'); state.geocodeCache={}; state.distanceCache={}; alert('좌표/거리 캐시를 삭제했습니다.'); });
@@ -159,6 +171,7 @@
   async function runSearch(){
     const keyword = $('keywordInput').value.trim(); const originText = $('originInput').value.trim();
     if(!keyword){ alert('검색어를 입력하세요. 예: 판금, CNC, 금형'); return; }
+    const classified = classifyKeyword(keyword);
     if(!originText){ alert('기준 주소를 입력하세요. 예: 남양주시 진접읍, 동탄 몇 번지'); return; }
     clearResults(); setStatus('지역을 찾고 데이터를 불러오는 중입니다…'); showLoader();
     const region = detectRegion(originText);
@@ -174,27 +187,37 @@
     await loadRegions(slugs);
     const rows = slugs.flatMap(slug => window.FR_SHARDS?.[slug] || []);
     state.rows = rows;
-    setStatus(`${regionLabel} 데이터 ${fmt.format(rows.length)}건에서 '${keyword}' 검색 중…`);
+    setStatus(`${regionLabel} 데이터 ${fmt.format(rows.length)}건에서 '${keyword}' 검색 중…${classified ? ` 분류: ${classified.label}` : ''}`);
     const origin = await resolveOrigin(originText, region);
     state.origin = origin;
     placeOrigin(origin, originText);
-    let candidates = searchRows(rows, keyword).slice(0, 250);
-    state.candidates = candidates;
-    sortCandidates();
-    renderKeywordChips(candidates, keyword);
-    renderResults();
-    updateSummary(regionLabel, candidates.length, 0, '-');
+    let candidates = searchRows(rows, keyword, classified).slice(0, 250);
+    state.allCandidates = candidates;
+    state.candidates = [];
+    renderKeywordChips(candidates, keyword, classified);
+    updateSummary(regionLabel, 0, 0, '-');
     if(candidates.length===0){
-      setStatus(`'${keyword}' 결과가 없습니다. 생산품/원자재/업종명 기준으로도 검색했습니다. 다른 단어를 입력해 보세요.`); hideLoader(); return;
+      renderEmpty('검색 결과 없음', `'${keyword}'와 가까운 공장이 추천 기준(${getMinScore()}점)을 넘지 못했습니다. 다른 표현으로 검색하거나 추천 기준을 낮춰 보세요.`);
+      setStatus(`'${keyword}' 추천 점수가 기준(${getMinScore()}점)보다 낮아 결과 없음으로 표시했습니다.`); hideLoader(); return;
     }
-    setStatus(`${fmt.format(candidates.length)}건을 찾았습니다. 비용 방지를 위해 상위 ${state.maxGeocode}건만 좌표화합니다…`);
+    const radiusKm = getRadiusKm();
+    setStatus(`${fmt.format(candidates.length)}건을 찾았습니다. ${radiusKm}km 이내 확인을 위해 상위 ${state.maxGeocode}건만 좌표화합니다…`);
     await geocodeTop(candidates.slice(0, state.maxGeocode));
-    await computeRoadDistances(state.candidates.filter(c=>c.lat&&c.lng).slice(0,state.maxDistance));
-    recomputeCosts(); sortCandidates(); renderResults(); fitMap(); selectCandidate(state.candidates.find(c=>c.lat&&c.lng) || state.candidates[0]);
+    await computeRoadDistances(candidates.filter(c=>c.lat&&c.lng).slice(0,state.maxDistance));
+    recomputeDistances(candidates);
+    applyRadiusFilter();
+    clearMarkers();
+    state.candidates.filter(c=>c.lat&&c.lng).forEach(addFactoryMarker);
+    sortCandidates(); renderResults(); fitMap(); selectCandidate(state.candidates.find(c=>c.lat&&c.lng) || state.candidates[0]);
     const mapped = state.candidates.filter(c=>c.lat&&c.lng).length;
-    const cheapest = state.candidates.filter(c=>Number.isFinite(c.cost)).sort((a,b)=>a.cost-b.cost)[0];
-    updateSummary(regionLabel, candidates.length, mapped, cheapest ? money(cheapest.cost) : '-');
-    setStatus(`${fmt.format(candidates.length)}건 검색 완료. 지도에는 좌표 확인된 ${mapped}건만 표시했습니다.`);
+    const nearest = state.candidates.filter(c=>Number.isFinite(c.km)).sort((a,b)=>a.km-b.km)[0];
+    updateSummary(regionLabel, state.candidates.length, mapped, nearest ? nearest.km.toFixed(1)+'km' : '-');
+    if(state.candidates.length===0){
+      renderEmpty('검색 결과 없음', `${radiusKm}km 이내에서 추천 기준(${getMinScore()}점)을 넘는 공장을 찾지 못했습니다. 검색 반경을 넓히거나 추천 기준을 낮춰 보세요.`);
+      setStatus(`${radiusKm}km 이내 검색 결과가 없습니다. 반경을 넓히거나 추천 기준을 낮춰 보세요.`);
+    } else {
+      setStatus(`${radiusKm}km 이내 ${fmt.format(state.candidates.length)}건 검색 완료. 지도에는 좌표 확인된 ${mapped}건만 표시했습니다.`);
+    }
     hideLoader();
   }
 
@@ -277,10 +300,10 @@
     for(const slug of slugs){ await loadRegion(slug); }
   }
 
-  function searchRows(rows, keyword){
+  function searchRows(rows, keyword, classified=null){
     const raw = keyword.trim();
-    const base = normalize(raw.replace(/공장|업체|회사|제조|찾아줘|검색/g,'')) || normalize(raw);
-    const terms = expandTerms(base, raw);
+    const base = classified?.base || normalize(raw.replace(/공장|업체|회사|제조|찾아줘|검색/g,'')) || normalize(raw);
+    const terms = expandTerms(base, raw, classified);
     const out=[];
     for(const r of rows){
       const sx = r[C.search];
@@ -296,18 +319,53 @@
       let synHits=[];
       for(const t of terms.syn){ if(t && sx.includes(t)){ score += 11; synHits.push(t); if(synHits.length>=4) break; } }
       if(synHits.length) reasons.push(`관련어 ${synHits.slice(0,3).join(', ')} 포함`);
+      if(classified?.label && score>0) reasons.unshift(`분류 ${classified.label}`);
       if(score<=0) continue;
       const emp = r[C.employees] || 0; score += Math.min(10, Math.log10(emp+1)*4);
       if((r[C.size]||'').includes('중기업')) score += 3; if((r[C.size]||'').includes('대기업')) score += 6;
-      out.push({ row:r, score:Math.round(score), reasons:[...new Set(reasons)].slice(0,4), lat:null, lng:null, km:null, minutes:null, cost:null });
+      score = Math.round(score);
+      if(score < getMinScore()) continue;
+      out.push({ row:r, score, reasons:[...new Set(reasons)].slice(0,4), lat:null, lng:null, km:null, minutes:null, cost:null });
     }
     out.sort((a,b)=>b.score-a.score || (b.row[C.employees]||0)-(a.row[C.employees]||0));
     return out;
   }
 
-  function expandTerms(base, raw){
+  function classifyKeyword(keyword){
+    const raw = String(keyword||'').trim();
+    const cleaned = normalize(raw.replace(/공장|업체|회사|제조|찾아줘|찾아|검색|찾기|해줘|가능한|하는곳|하는 곳/g,''));
+    const low = raw.toLowerCase();
+    let best = null;
+    for(const [key, vals] of Object.entries(SYN)){
+      const label = CATEGORY_LABELS[key] || key;
+      const all = [key, label, ...vals];
+      let score = 0;
+      let hit = '';
+      for(const v of all){
+        const nv = normalize(v);
+        if(!nv) continue;
+        if(cleaned === nv){ score = Math.max(score, 120 + nv.length); hit = v; }
+        else if(cleaned.includes(nv) || nv.includes(cleaned)){ score = Math.max(score, 90 + Math.min(nv.length, cleaned.length)); hit = v; }
+        else if(low.includes(String(v).toLowerCase())){ score = Math.max(score, 80 + nv.length); hit = v; }
+      }
+      // 짧은 오타나 붙여 쓴 표현도 어느 정도 같은 분류로 묶는다.
+      if(!score && cleaned.length >= 2){
+        for(const v of all){
+          const nv = normalize(v);
+          if(nv.length < 2) continue;
+          const sim = similarity(cleaned, nv);
+          if(sim >= 0.72){ score = Math.max(score, Math.round(65 * sim)); hit = v; }
+        }
+      }
+      if(score && (!best || score > best.score)) best = { key, label, base:normalize(key), score, hit:normalize(hit) };
+    }
+    return best;
+  }
+
+  function expandTerms(base, raw, classified=null){
     const syn = new Set([base]);
     const low = raw.toLowerCase();
+    if(classified?.key && SYN[classified.key]) SYN[classified.key].forEach(v=>syn.add(normalize(v)));
     for(const [k,vals] of Object.entries(SYN)){
       if(low.includes(k.toLowerCase()) || normalize(k)===base || vals.some(v=>normalize(v)===base || low.includes(String(v).toLowerCase()))){
         vals.forEach(v=>syn.add(normalize(v)));
@@ -390,28 +448,37 @@
     }
   }
 
-  function recomputeCosts(){
+  function recomputeDistances(items=state.candidates){
     const origin = state.origin; if(!origin) return;
-    for(const c of state.candidates){
+    for(const c of items){
       if(c.lat && c.lng){
         const km = c.roadKm || haversine(origin.lat, origin.lng, c.lat, c.lng) * 1.28;
         c.km = km;
-        const v = VEHICLES[$('vehicleSelect').value];
-        c.minutes = c.roadMinutes || Math.max(6, (km / v.speed) * 60 + 6);
-        c.cost = calcCost(km, c.minutes);
-      } else { c.km=null; c.minutes=null; c.cost=null; }
+        c.minutes = c.roadMinutes || Math.max(6, (km / 42) * 60 + 6);
+      } else { c.km=null; c.minutes=null; }
+      c.cost = null;
     }
   }
-  function refreshCosts(){ recomputeCosts(); sortCandidates(); renderResults(); renderSelected(); const cheapest = state.candidates.filter(c=>Number.isFinite(c.cost)).sort((a,b)=>a.cost-b.cost)[0]; updateSummary($('sumRegion').textContent, state.candidates.length, state.candidates.filter(c=>c.lat&&c.lng).length, cheapest?money(cheapest.cost):'-'); }
-  function calcCost(km, minutes){
-    const v=VEHICLES[$('vehicleSelect').value], m=MODES[$('modeSelect').value];
-    const raw = (v.base + km*v.km + minutes*v.minute) * m.mul;
-    return Math.max(v.min, raw);
+  function getMinScore(){
+    const v = Number($('scoreThreshold')?.value || state.minRecommendScore || DEFAULT_MIN_RECOMMEND_SCORE);
+    return clamp(v, 25, 80);
+  }
+  function getRadiusKm(){ return Number($('radiusSelect')?.value || 10); }
+  function applyRadiusFilter(){
+    const radius = getRadiusKm();
+    state.candidates = state.allCandidates.filter(c => Number.isFinite(c.km) && c.km <= radius);
+  }
+  function refreshRadius(){
+    applyRadiusFilter(); sortCandidates(); renderResults(); renderSelected(); clearMarkers();
+    state.candidates.filter(c=>c.lat&&c.lng).forEach(addFactoryMarker); if(state.origin) placeOrigin(state.origin, $('originInput').value.trim()); fitMap();
+    const nearest = state.candidates.filter(c=>Number.isFinite(c.km)).sort((a,b)=>a.km-b.km)[0];
+    updateSummary($('sumRegion').textContent, state.candidates.length, state.candidates.filter(c=>c.lat&&c.lng).length, nearest?nearest.km.toFixed(1)+'km':'-');
+    if(!state.candidates.length) renderEmpty('검색 결과 없음', `${getRadiusKm()}km 이내에서 추천 기준(${getMinScore()}점)을 넘는 공장을 찾지 못했습니다. 검색 반경을 넓히거나 추천 기준을 낮춰 보세요.`);
   }
   function sortCandidates(){
     const s=$('sortSelect').value;
     state.candidates.sort((a,b)=>{
-      if(s==='cost') return val(a.cost)-val(b.cost) || b.score-a.score;
+      if(s==='distance') return val(a.km)-val(b.km) || b.score-a.score;
       if(s==='time') return val(a.minutes)-val(b.minutes) || b.score-a.score;
       if(s==='emp') return (b.row[C.employees]||0)-(a.row[C.employees]||0) || b.score-a.score;
       return b.score-a.score || val(a.minutes)-val(b.minutes);
@@ -422,7 +489,7 @@
   function renderResults(){
     const box=$('results');
     const list=state.candidates.slice(0,80);
-    if(!list.length){ renderEmpty('검색 결과 없음', '입력한 단어가 생산품, 원자재, 업종명, 회사명에 있는지 확인해 주세요.'); return; }
+    if(!list.length){ renderEmpty('검색 결과 없음', `${getRadiusKm()}km 이내에서 추천 기준(${getMinScore()}점)을 넘는 공장이 없습니다. 검색 반경을 넓히거나 추천 기준을 낮춰 보세요.`); return; }
     box.innerHTML=list.map((c,idx)=>{
       const r=c.row; const active=state.selected===c?' active':'';
       const reasons=(c.reasons||[]).map(x=>`<span class="tag">${esc(x)}</span>`).join('');
@@ -433,20 +500,21 @@
         <div class="cost-line">
           <div><span>거리</span><b>${c.km?c.km.toFixed(1)+'km':'좌표 확인 전'}</b></div>
           <div><span>시간</span><b>${c.minutes?Math.round(c.minutes)+'분':'-'}</b></div>
-          <div><span>예상비</span><b>${c.cost?money(c.cost):'-'}</b></div>
+          <div><span>추천</span><b>${Math.round(c.score)}점</b></div>
         </div>
       </article>`;
     }).join('');
     box.querySelectorAll('.result').forEach(el=>el.addEventListener('click',()=>selectCandidate(list[Number(el.dataset.idx)])));
   }
   function renderEmpty(title, desc){ $('results').innerHTML=`<div class="empty"><b>${esc(title)}</b><br>${esc(desc)}</div>`; }
-  function renderKeywordChips(candidates, current){
+  function renderKeywordChips(candidates, current, classified=null){
     const counter = new Map();
     for(const c of candidates.slice(0,120)){
       String(c.row[C.product]||'').split(/[,/·\s()]+/).forEach(w=>{ if(w.length>=2 && w.length<=10 && !normalize(current).includes(normalize(w))) counter.set(w,(counter.get(w)||0)+1); });
     }
     const chips=[...counter.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10);
-    $('keywordChips').innerHTML=chips.map(([w,n])=>`<button class="small-chip" data-k="${esc(w)}">${esc(w)} ${n}</button>`).join('');
+    const classifiedHtml = classified ? `<span class="classified-chip">분류: ${esc(classified.label)}</span>` : '';
+    $('keywordChips').innerHTML=classifiedHtml + chips.map(([w,n])=>`<button class="small-chip" data-k="${esc(w)}">${esc(w)} ${n}</button>`).join('');
     $('keywordChips').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ $('keywordInput').value=b.dataset.k; runSearch(); }));
   }
 
@@ -456,9 +524,9 @@
   }
   function renderSelected(){
     const c=state.selected;
-    if(!c){ $('selectedName').textContent='공장을 선택하세요'; $('selectedAddress').textContent='검색 결과에서 공장을 누르면 편도·왕복·주문배송 비용을 보여줍니다.'; ['selectedDistance','selectedTime','selectedCost','selectedProduct'].forEach(id=>$(id).textContent='-'); return; }
+    if(!c){ $('selectedName').textContent='공장을 선택하세요'; $('selectedAddress').textContent='검색 결과에서 공장을 누르면 기준 주소에서의 거리와 예상 시간을 보여줍니다.'; ['selectedDistance','selectedTime','selectedCost','selectedProduct'].forEach(id=>$(id).textContent='-'); return; }
     const r=c.row; $('selectedName').textContent=r[C.name]||'회사명 미상'; $('selectedAddress').textContent=r[C.address]||'-';
-    $('selectedDistance').textContent=c.km?`${c.km.toFixed(1)}km`:'좌표 확인 전'; $('selectedTime').textContent=c.minutes?`${Math.round(c.minutes)}분`:'-'; $('selectedCost').textContent=c.cost?money(c.cost):'-'; $('selectedProduct').textContent=r[C.product]||r[C.category]||'-';
+    $('selectedDistance').textContent=c.km?`${c.km.toFixed(1)}km`:'좌표 확인 전'; $('selectedTime').textContent=c.minutes?`${Math.round(c.minutes)}분`:'-'; $('selectedCost').textContent=`${Math.round(c.score)}점`; $('selectedProduct').textContent=r[C.product]||r[C.category]||'-';
   }
 
   function placeOrigin(pos, label){
@@ -495,7 +563,7 @@
     else if(state.map?.fitBounds){ state.map.fitBounds(pts, { padding:[30,30] }); }
   }
 
-  function clearResults(){ state.candidates=[]; state.selected=null; $('results').innerHTML=''; $('keywordChips').innerHTML=''; renderSelected(); clearMarkers(); }
+  function clearResults(){ state.candidates=[]; state.allCandidates=[]; state.selected=null; $('results').innerHTML=''; $('keywordChips').innerHTML=''; renderSelected(); clearMarkers(); }
   function showLoader(){ $('results').innerHTML='<div class="loader"></div><div class="empty">검색 중입니다. 지역별 데이터만 불러와 속도를 개선했습니다.</div>'; }
   function hideLoader(){ const l=document.querySelector('.loader'); if(l) l.remove(); }
   function setStatus(t){ $('status').textContent=t; }
@@ -503,6 +571,22 @@
   function saveCache(){ try{ localStorage.setItem('fr10.geocodeCache', JSON.stringify(limitObj(state.geocodeCache,2000))); localStorage.setItem('fr10.distanceCache', JSON.stringify(limitObj(state.distanceCache,2000))); }catch(e){} }
   function limitObj(o,n){ const entries=Object.entries(o); return Object.fromEntries(entries.slice(Math.max(0, entries.length-n))); }
   function readJSON(k,f){ try{return JSON.parse(localStorage.getItem(k)||'')||f;}catch{return f;} }
+  function similarity(a,b){
+    if(a === b) return 1;
+    if(!a || !b) return 0;
+    const dist = levenshtein(a,b);
+    return 1 - dist / Math.max(a.length, b.length);
+  }
+  function levenshtein(a,b){
+    const dp = Array.from({length:a.length+1}, (_,i)=>[i]);
+    for(let j=1;j<=b.length;j++) dp[0][j]=j;
+    for(let i=1;i<=a.length;i++){
+      for(let j=1;j<=b.length;j++){
+        dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1] + (a[i-1]===b[j-1] ? 0 : 1));
+      }
+    }
+    return dp[a.length][b.length];
+  }
   function normalize(s){ return String(s||'').normalize('NFKC').toLowerCase().replace(/[^0-9a-z가-힣]+/g,''); }
   function esc(s){ return String(s??'').replace(/[&<>'"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
   function haversine(lat1,lng1,lat2,lng2){ const R=6371, toRad=d=>d*Math.PI/180; const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1); const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2; return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
