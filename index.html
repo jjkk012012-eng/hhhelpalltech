@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Factory Radar v10 | 공장 검색·지도·배송비 계산</title>
+  <title>Factory Radar v12 | 공장 검색·지도·배송비 계산</title>
   <meta name="description" content="검색어와 상세 주소만 입력하면 주변 공장을 찾고, 지도·이동시간·편도/왕복/배송비를 계산합니다." />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -15,7 +15,6 @@
   <header class="hero">
     <nav class="nav">
       <div class="brand"><span class="brand-mark">F</span><span>Factory Radar</span></div>
-      <button class="ghost" id="apiOpen" type="button">지도 API 설정</button>
     </nav>
     <section class="hero-copy">
       <p class="eyebrow">전국 등록공장 277,532건 기반</p>
@@ -118,26 +117,5 @@
     </section>
   </main>
 
-  <dialog id="apiDialog" class="dialog">
-    <form method="dialog">
-      <h2>지도 API 설정</h2>
-      <p>정확한 국내 상세주소 지도 표시에는 API 키가 필요합니다. 키는 브라우저에만 저장됩니다. API 비용 방지를 위해 검색당 좌표/거리 호출 수를 제한합니다.</p>
-      <label class="radio"><input type="radio" name="provider" value="google" checked /> Google Maps</label>
-      <label>Google Maps JavaScript API Key <input id="googleKey" placeholder="AIza..." /></label>
-      <label class="radio"><input type="radio" name="provider" value="naver" /> Naver Maps</label>
-      <label>Naver Maps Client ID <input id="naverId" placeholder="Client ID" /></label>
-      <label>Naver Maps Client Secret <input id="naverSecret" placeholder="Client Secret 또는 개발용 공란" /></label>
-      <div class="api-limits">
-        <label>검색당 좌표 변환 최대 건수 <input id="maxGeocode" type="number" min="5" max="80" step="5" value="20" /></label>
-        <label>검색당 도로 시간 계산 최대 건수 <input id="maxDistance" type="number" min="5" max="50" step="5" value="20" /></label>
-        <p class="muted">권장값은 20건입니다. 검색 결과가 많아도 상위 후보만 API를 호출하고, 좌표/거리 결과는 브라우저 캐시에 저장해 재호출을 줄입니다.</p>
-      </div>
-      <div class="dialog-actions">
-        <button type="button" class="ghost" id="clearCache">좌표 캐시 삭제</button>
-        <button type="submit" class="ghost">닫기</button>
-        <button type="button" class="primary" id="apiSave">저장</button>
-      </div>
-    </form>
-  </dialog>
 </body>
 </html>

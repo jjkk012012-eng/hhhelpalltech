@@ -74,15 +74,16 @@
     $('sortSelect').addEventListener('change', () => { sortCandidates(); renderResults(); });
     $('modeSelect').addEventListener('change', refreshCosts);
     $('vehicleSelect').addEventListener('change', refreshCosts);
-    $('apiOpen').addEventListener('click', () => $('apiDialog').showModal());
-    $('apiSave').addEventListener('click', saveApi);
-    $('clearCache').addEventListener('click', () => { localStorage.removeItem('fr10.geocodeCache'); localStorage.removeItem('fr10.distanceCache'); state.geocodeCache={}; state.distanceCache={}; alert('좌표/거리 캐시를 삭제했습니다.'); });
+    const apiOpen = $('apiOpen'); if(apiOpen) apiOpen.addEventListener('click', () => $('apiDialog')?.showModal());
+    const apiSave = $('apiSave'); if(apiSave) apiSave.addEventListener('click', saveApi);
+    const clearCache = $('clearCache'); if(clearCache) clearCache.addEventListener('click', () => { localStorage.removeItem('fr10.geocodeCache'); localStorage.removeItem('fr10.distanceCache'); state.geocodeCache={}; state.distanceCache={}; alert('좌표/거리 캐시를 삭제했습니다.'); });
     document.querySelectorAll('.chip[data-demo-k]').forEach(btn => btn.addEventListener('click', () => {
       $('keywordInput').value = btn.dataset.demoK; $('originInput').value = btn.dataset.demoO; runSearch();
     }));
   }
 
   function initApiDialog(){
+    if(!$('googleKey')) return;
     $('googleKey').value = state.googleKey; $('naverId').value = state.naverId; $('naverSecret').value = state.naverSecret; $('maxGeocode').value = state.maxGeocode; $('maxDistance').value = state.maxDistance;
     const r = document.querySelector(`input[name=provider][value="${state.provider}"]`); if(r) r.checked = true;
   }
@@ -93,7 +94,7 @@
     state.maxGeocode = clamp(Number($('maxGeocode').value || 20), 5, 80);
     state.maxDistance = clamp(Number($('maxDistance').value || 20), 5, 50);
     localStorage.setItem('fr10.provider', state.provider); localStorage.setItem('fr10.googleKey', state.googleKey); localStorage.setItem('fr10.naverId', state.naverId); localStorage.setItem('fr10.naverSecret', state.naverSecret); localStorage.setItem('fr10.maxGeocode', state.maxGeocode); localStorage.setItem('fr10.maxDistance', state.maxDistance);
-    $('apiDialog').close(); await setupMap(true); setStatus('지도 API 설정을 저장했습니다. 다시 검색하면 좌표를 새로 확인합니다.');
+    $('apiDialog')?.close(); await setupMap(true); setStatus('지도 설정을 저장했습니다. 다시 검색하면 좌표를 새로 확인합니다.');
   }
 
   async function setupMap(force=false){
@@ -113,7 +114,7 @@
     if(!window.L){ $('mapNote').textContent='지도 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.'; return; }
     state.map = L.map('map', { zoomControl:true }).setView([36.5,127.8],7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'© OpenStreetMap'}).addTo(state.map);
-    $('mapNote').textContent='API 키가 없으면 지도는 표시되지만, 공장 주소의 정확한 좌표화는 제한됩니다. Google/Naver API 키를 넣으면 정확도가 올라갑니다.';
+    $('mapNote').textContent='지도와 주소 좌표화를 준비했습니다. 검색 결과 중 좌표 확인된 공장만 지도에 표시합니다.';
   }
   function initGoogleMap(){
     state.mapKind='google';

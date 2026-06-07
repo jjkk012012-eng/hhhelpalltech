@@ -1,4 +1,4 @@
-# Factory Radar Simple v10
+# Factory Radar Simple v12
 
 검색어와 상세 주소만 입력해 주변 제조 공장을 찾고, 지도 표시·이동시간·편도/왕복/주문배송 예상비를 계산하는 정적 웹앱 프로토타입입니다.
 
