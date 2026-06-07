@@ -47,6 +47,27 @@
     { names:['김해','김해시'], sido:'경상남도', sigungu:'김해시', lat:35.2285, lng:128.8892 }
   ];
 
+
+  const PROVINCE_ALIASES = [
+    {sido:'서울특별시', names:['서울','서울시','서울특별시'], center:{lat:37.5665,lng:126.9780}},
+    {sido:'부산광역시', names:['부산','부산시','부산광역시'], center:{lat:35.1796,lng:129.0756}},
+    {sido:'대구광역시', names:['대구','대구시','대구광역시'], center:{lat:35.8714,lng:128.6014}},
+    {sido:'인천광역시', names:['인천','인천시','인천광역시'], center:{lat:37.4563,lng:126.7052}},
+    {sido:'광주광역시', names:['광주','광주시','광주광역시'], center:{lat:35.1595,lng:126.8526}},
+    {sido:'대전광역시', names:['대전','대전시','대전광역시'], center:{lat:36.3504,lng:127.3845}},
+    {sido:'울산광역시', names:['울산','울산시','울산광역시'], center:{lat:35.5384,lng:129.3114}},
+    {sido:'세종특별자치시', names:['세종','세종시','세종특별자치시'], center:{lat:36.4800,lng:127.2890}},
+    {sido:'경기도', names:['경기','경기도'], center:{lat:37.4138,lng:127.5183}},
+    {sido:'강원특별자치도', names:['강원','강원도','강원특별자치도'], center:{lat:37.8228,lng:128.1555}},
+    {sido:'충청북도', names:['충북','충청북도'], center:{lat:36.6357,lng:127.4914}},
+    {sido:'충청남도', names:['충남','충청남도'], center:{lat:36.6588,lng:126.6728}},
+    {sido:'전북특별자치도', names:['전북','전라북도','전북특별자치도'], center:{lat:35.7175,lng:127.1530}},
+    {sido:'전라남도', names:['전남','전라남도'], center:{lat:34.8679,lng:126.9910}},
+    {sido:'경상북도', names:['경북','경상북도'], center:{lat:36.4919,lng:128.8889}},
+    {sido:'경상남도', names:['경남','경상남도'], center:{lat:35.4606,lng:128.2132}},
+    {sido:'제주특별자치도', names:['제주','제주도','제주특별자치도'], center:{lat:33.4996,lng:126.5312}}
+  ];
+
   const state = {
     provider: localStorage.getItem('fr10.provider') || 'google',
     googleKey: localStorage.getItem('fr10.googleKey') || EMBEDDED_GOOGLE_KEY,
@@ -147,11 +168,13 @@
       renderEmpty('지역을 찾지 못했습니다', '정확하고 빠른 검색을 위해 기준 주소에 시군구를 포함해 주세요.');
       return;
     }
-    updateSummary(`${region.sido} ${region.sigungu}`, 0, 0, '-');
-    await loadRegion(region.slug);
-    const rows = window.FR_SHARDS?.[region.slug] || [];
+    const regionLabel = region.label || `${region.sido} ${region.sigungu || ''}`.trim();
+    updateSummary(regionLabel, 0, 0, '-');
+    const slugs = region.slugs || [region.slug];
+    await loadRegions(slugs);
+    const rows = slugs.flatMap(slug => window.FR_SHARDS?.[slug] || []);
     state.rows = rows;
-    setStatus(`${region.sido} ${region.sigungu} 데이터 ${fmt.format(rows.length)}건에서 '${keyword}' 검색 중…`);
+    setStatus(`${regionLabel} 데이터 ${fmt.format(rows.length)}건에서 '${keyword}' 검색 중…`);
     const origin = await resolveOrigin(originText, region);
     state.origin = origin;
     placeOrigin(origin, originText);
@@ -160,7 +183,7 @@
     sortCandidates();
     renderKeywordChips(candidates, keyword);
     renderResults();
-    updateSummary(`${region.sido} ${region.sigungu}`, candidates.length, 0, '-');
+    updateSummary(regionLabel, candidates.length, 0, '-');
     if(candidates.length===0){
       setStatus(`'${keyword}' 결과가 없습니다. 생산품/원자재/업종명 기준으로도 검색했습니다. 다른 단어를 입력해 보세요.`); hideLoader(); return;
     }
@@ -170,32 +193,88 @@
     recomputeCosts(); sortCandidates(); renderResults(); fitMap(); selectCandidate(state.candidates.find(c=>c.lat&&c.lng) || state.candidates[0]);
     const mapped = state.candidates.filter(c=>c.lat&&c.lng).length;
     const cheapest = state.candidates.filter(c=>Number.isFinite(c.cost)).sort((a,b)=>a.cost-b.cost)[0];
-    updateSummary(`${region.sido} ${region.sigungu}`, candidates.length, mapped, cheapest ? money(cheapest.cost) : '-');
+    updateSummary(regionLabel, candidates.length, mapped, cheapest ? money(cheapest.cost) : '-');
     setStatus(`${fmt.format(candidates.length)}건 검색 완료. 지도에는 좌표 확인된 ${mapped}건만 표시했습니다.`);
     hideLoader();
   }
 
   function detectRegion(text){
     const n = normalize(text);
+
+    // 1) 동탄, 진접, 부산항 같은 자주 쓰는 장소 힌트는 가장 먼저 처리한다.
     const hints = PLACE_HINTS.find(p => p.names.some(name => n.includes(normalize(name))));
     if(hints){
       const found = manifest().regions.find(r => r.sido===hints.sido && r.sigungu===hints.sigungu);
-      if(found) return { ...found, hint:hints };
+      if(found) return { ...found, label:`${found.sido} ${found.sigungu}`, hint:hints, slugs:[found.slug] };
     }
+
+    // 2) 시군구/구/읍면동이 들어간 상세 주소는 해당 시군구 한 곳으로 제한한다.
     const candidates=[];
     for(const r of manifest().regions){
+      if(!r.sigungu) continue;
       const strings=[r.sido+r.sigungu, r.sigungu, ...(r.aliases||[])];
       let best=0;
-      for(const s of strings){ const ns=normalize(s); if(ns && n.includes(ns)) best=Math.max(best, ns.length); }
-      if(best) candidates.push({ ...r, match:best });
+      for(const s of strings){
+        const ns=normalize(s);
+        if(ns && n.includes(ns)) best=Math.max(best, ns.length);
+      }
+      if(best) candidates.push({ ...r, match:best, label:`${r.sido} ${r.sigungu}`, slugs:[r.slug] });
     }
-    candidates.sort((a,b)=>b.match-a.match || b.count-a.count);
-    return candidates[0] || null;
+    if(candidates.length){
+      candidates.sort((a,b)=>b.match-a.match || b.count-a.count);
+      return candidates[0];
+    }
+
+    // 3) '부산', '세종', '서울', '경기'처럼 광역 단위만 입력하면 해당 시도 전체를 검색한다.
+    const prov = PROVINCE_ALIASES.find(p => p.names.some(name => n.includes(normalize(name))));
+    if(prov){
+      const regs = manifest().regions.filter(r => r.sido===prov.sido && r.count>0);
+      if(regs.length){
+        return {
+          sido: prov.sido,
+          sigungu: '전체',
+          label: `${prov.sido} 전체`,
+          slugs: regs.map(r=>r.slug),
+          count: regs.reduce((sum,r)=>sum+r.count,0),
+          hint: {lat:prov.center.lat, lng:prov.center.lng}
+        };
+      }
+    }
+
+    // 4) 마지막으로 manifest에 있는 빈 sigungu 행이나 별칭을 확인한다.
+    const broad=[];
+    for(const r of manifest().regions){
+      const strings=[r.sido, ...(r.aliases||[])];
+      let best=0;
+      for(const s of strings){ const ns=normalize(s); if(ns && n.includes(ns)) best=Math.max(best, ns.length); }
+      if(best) broad.push({ ...r, match:best });
+    }
+    broad.sort((a,b)=>b.match-a.match || b.count-a.count);
+    if(broad[0]){
+      const regs = manifest().regions.filter(r => r.sido===broad[0].sido && r.count>0);
+      return {
+        sido:broad[0].sido,
+        sigungu:'전체',
+        label:`${broad[0].sido} 전체`,
+        slugs:regs.map(r=>r.slug),
+        count:regs.reduce((sum,r)=>sum+r.count,0),
+        hint:{lat:36.5,lng:127.8}
+      };
+    }
+    return null;
   }
+
 
   function loadRegion(slug){
     if(state.loaded.has(slug) || window.FR_SHARDS?.[slug]) return Promise.resolve();
     return new Promise((resolve,reject)=>{ const s=document.createElement('script'); s.src=`data/regions/${slug}.js`; s.onload=()=>{state.loaded.add(slug); resolve();}; s.onerror=()=>reject(new Error('region load failed')); document.head.appendChild(s); });
+  }
+
+
+  async function loadRegions(slugs){
+    // 광역시/도만 입력했을 때도 부산·세종·서울 등 전체 지역을 검색한다.
+    // 브라우저가 멈추지 않도록 순차 로딩한다.
+    for(const slug of slugs){ await loadRegion(slug); }
   }
 
   function searchRows(rows, keyword){
