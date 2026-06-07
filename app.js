@@ -110,9 +110,6 @@
     const apiOpen = $('apiOpen'); if(apiOpen) apiOpen.addEventListener('click', () => $('apiDialog')?.showModal());
     const apiSave = $('apiSave'); if(apiSave) apiSave.addEventListener('click', saveApi);
     const clearCache = $('clearCache'); if(clearCache) clearCache.addEventListener('click', () => { localStorage.removeItem('fr10.geocodeCache'); localStorage.removeItem('fr10.distanceCache'); state.geocodeCache={}; state.distanceCache={}; alert('좌표/거리 캐시를 삭제했습니다.'); });
-    document.querySelectorAll('.chip[data-demo-k]').forEach(btn => btn.addEventListener('click', () => {
-      $('keywordInput').value = btn.dataset.demoK; $('originInput').value = btn.dataset.demoO; runSearch();
-    }));
   }
 
   function initApiDialog(){
