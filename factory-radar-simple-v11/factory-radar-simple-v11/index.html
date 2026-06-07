@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Factory Radar v10 | 공장 검색·지도·배송비 계산</title>
+  <meta name="description" content="검색어와 상세 주소만 입력하면 주변 공장을 찾고, 지도·이동시간·편도/왕복/배송비를 계산합니다." />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script defer src="data/manifest.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="hero">
+    <nav class="nav">
+      <div class="brand"><span class="brand-mark">F</span><span>Factory Radar</span></div>
+      <button class="ghost" id="apiOpen" type="button">지도 API 설정</button>
+    </nav>
+    <section class="hero-copy">
+      <p class="eyebrow">전국 등록공장 277,532건 기반</p>
+      <h1>공장 찾기, 검색어와 주소만 입력하세요.</h1>
+      <p class="lead">예: <b>판금</b> + <b>남양주시 진접읍</b> → 판금 관련 공장, 지도 위치, 이동시간, 주문배송 비용까지 한 번에 정리합니다.</p>
+    </section>
+  </header>
+
+  <main class="shell">
+    <section class="search-card" aria-label="공장 검색">
+      <form id="searchForm" class="search-grid">
+        <label>
+          <span>무엇을 찾나요?</span>
+          <input id="keywordInput" placeholder="판금, CNC, 금형, 도금, 사출, 알루미늄..." value="판금" autocomplete="off" />
+        </label>
+        <label>
+          <span>기준 주소</span>
+          <input id="originInput" placeholder="남양주시 진접읍 금강로 123번길 10" value="남양주시" autocomplete="off" />
+        </label>
+        <label>
+          <span>이용 방식</span>
+          <select id="modeSelect">
+            <option value="delivery">공장 → 내 주소 주문배송</option>
+            <option value="oneway">내 주소 → 공장 편도 방문</option>
+            <option value="roundtrip">내 주소 ↔ 공장 왕복 방문</option>
+          </select>
+        </label>
+        <label>
+          <span>차량</span>
+          <select id="vehicleSelect">
+            <option value="bike">오토바이/소형</option>
+            <option value="damas">다마스·라보</option>
+            <option value="1t" selected>1톤 트럭</option>
+            <option value="2_5t">2.5톤 트럭</option>
+            <option value="5t">5톤 트럭</option>
+            <option value="11t">11톤 트럭</option>
+          </select>
+        </label>
+        <button class="primary" type="submit">공장 찾기</button>
+      </form>
+      <div class="quick-row">
+        <button class="chip" data-demo-k="판금" data-demo-o="남양주시">남양주시 판금</button>
+        <button class="chip" data-demo-k="CNC" data-demo-o="화성시 동탄">동탄 CNC</button>
+        <button class="chip" data-demo-k="금형" data-demo-o="시흥시 정왕동">시흥 금형</button>
+        <button class="chip" data-demo-k="도금" data-demo-o="인천 남동구">남동구 도금</button>
+      </div>
+    </section>
+
+    <section class="summary" id="summary">
+      <div><strong id="sumRegion">-</strong><span>검색 지역</span></div>
+      <div><strong id="sumFound">0</strong><span>일치 공장</span></div>
+      <div><strong id="sumMapped">0</strong><span>지도 표시</span></div>
+      <div><strong id="sumCheapest">-</strong><span>최저 예상비</span></div>
+    </section>
+
+    <section class="workspace">
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-note" id="mapNote">정확한 지도 표시를 위해 Google 또는 Naver API 키를 넣으세요. 좌표 확인된 공장만 지도에 표시합니다.</div>
+      </div>
+      <aside class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>검색 결과</h2>
+            <p id="status">검색어와 기준 주소를 입력해 주세요.</p>
+          </div>
+          <select id="sortSelect" title="정렬">
+            <option value="score">추천순</option>
+            <option value="cost">비용 낮은순</option>
+            <option value="time">시간 짧은순</option>
+            <option value="emp">규모 큰순</option>
+          </select>
+        </div>
+        <div id="keywordChips" class="keyword-chips"></div>
+        <div id="results" class="results"></div>
+      </aside>
+    </section>
+
+    <section class="calc-card" id="calcCard">
+      <div>
+        <p class="eyebrow">선택 공장 비용 계산</p>
+        <h2 id="selectedName">공장을 선택하세요</h2>
+        <p id="selectedAddress">검색 결과에서 공장을 누르면 편도·왕복·주문배송 비용을 보여줍니다.</p>
+      </div>
+      <div class="calc-grid">
+        <div><span>거리</span><strong id="selectedDistance">-</strong></div>
+        <div><span>예상 시간</span><strong id="selectedTime">-</strong></div>
+        <div><span>예상 비용</span><strong id="selectedCost">-</strong></div>
+        <div><span>생산품</span><strong id="selectedProduct">-</strong></div>
+      </div>
+    </section>
+
+    <section class="how">
+      <h2>간단한 사용 방식</h2>
+      <div class="how-grid">
+        <div><b>1</b><h3>검색어 입력</h3><p>판금, CNC, 금형처럼 필요한 단어만 입력합니다.</p></div>
+        <div><b>2</b><h3>상세 주소 입력</h3><p>남양주시 진접읍, 동탄 몇 번지처럼 최대한 자세히 입력합니다.</p></div>
+        <div><b>3</b><h3>시간·비용 확인</h3><p>편도, 왕복, 주문배송 기준으로 이동시간과 예상비를 계산합니다.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="apiDialog" class="dialog">
+    <form method="dialog">
+      <h2>지도 API 설정</h2>
+      <p>정확한 국내 상세주소 지도 표시에는 API 키가 필요합니다. 키는 브라우저에만 저장됩니다. API 비용 방지를 위해 검색당 좌표/거리 호출 수를 제한합니다.</p>
+      <label class="radio"><input type="radio" name="provider" value="google" checked /> Google Maps</label>
+      <label>Google Maps JavaScript API Key <input id="googleKey" placeholder="AIza..." /></label>
+      <label class="radio"><input type="radio" name="provider" value="naver" /> Naver Maps</label>
+      <label>Naver Maps Client ID <input id="naverId" placeholder="Client ID" /></label>
+      <label>Naver Maps Client Secret <input id="naverSecret" placeholder="Client Secret 또는 개발용 공란" /></label>
+      <div class="api-limits">
+        <label>검색당 좌표 변환 최대 건수 <input id="maxGeocode" type="number" min="5" max="80" step="5" value="20" /></label>
+        <label>검색당 도로 시간 계산 최대 건수 <input id="maxDistance" type="number" min="5" max="50" step="5" value="20" /></label>
+        <p class="muted">권장값은 20건입니다. 검색 결과가 많아도 상위 후보만 API를 호출하고, 좌표/거리 결과는 브라우저 캐시에 저장해 재호출을 줄입니다.</p>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="ghost" id="clearCache">좌표 캐시 삭제</button>
+        <button type="submit" class="ghost">닫기</button>
+        <button type="button" class="primary" id="apiSave">저장</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
